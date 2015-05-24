@@ -1,0 +1,140 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "Manish Jariwala"
+date: "Saturday, May 23, 2015"
+output: html_document
+---
+###Synposis
+Gellersen et. al. conducted a research on activity recognition to answer the "how (well)"  an health related activity has been performed. They capture data through sensors during weight lifting exercises. 
+
+The data was captured through accelometers on the belt, forearm, arm and dumbbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+
+The assignment requires to show the model selection, cross validation and prediction on classe variable. 
+
+
+###Download Data and important data
+
+Load all library, and import data from the link provided for the assignment
+
+```{r warning=FALSE}
+#Inlcude require libary
+library(AppliedPredictiveModeling)
+library(caret)
+library(rattle)
+library(rpart.plot)
+library(randomForest)
+
+
+# download files in current working directory
+download.file(url="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",destfile="pml-training.csv",method = "curl" )
+download.file(url="https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv",destfile="pml-testing.csv", method= "curl")
+#Import the data, while replacing null values with NA
+im_training <- read.csv("pml-training.csv", na.strings=c("NA",""),header=TRUE)
+dim(im_training)
+im_testing <- read.csv("pml-testing.csv", na.strings=c("NA",""),header=TRUE)
+dim(im_testing)
+
+```
+
+
+
+
+Drop any columns with NA values.  Also, remove first 7 columns. Ensure the same is done to both training and testing data set that was downloaded.
+
+```{r, echo=FALSE}
+#Remove all columns with NA data in rows in Training data set
+im_cleanTraining <- im_training[,!sapply(im_training,function(x) any(is.na(x)))]
+#Remove first 7 columns in Trianing data set
+im_cleanTraining<- im_cleanTraining[,8:length(colnames(im_cleanTraining))]
+
+#Remove all columns with NA data in rows in testing data set
+im_cleanTesting<- im_testing[,!sapply(im_testing,function(x) any(is.na(x)))]
+
+#Remove first 7 columns in Testing data set
+im_cleanTesting <- im_cleanTesting[,8:length(colnames(im_cleanTesting))]
+````
+
+###Algorithm
+
+Using data partition create a training and testing data set out of the training dataset that was downloaded.
+
+```{r}
+# Seperate data into training and testing data set from training data that was downloaded
+inTrain = createDataPartition(y=im_cleanTraining$classe, p=0.7, list=FALSE)
+training = im_cleanTraining[inTrain,]
+testing = im_cleanTraining[-inTrain,]
+```
+
+The two algorithm chosen from caret package are classification tress and random forests
+
+####Classificaiton Tree
+
+Run classification with preprocessing and cross validation.
+```{r}
+set.seed(2222)
+modFitc <- train(training$classe ~ ., preProcess=c("center", "scale"), trControl=trainControl(method = "cv", number = 4), data = training, method = "rpart")
+print(modFitc, digits=3)
+```
+
+```{r}
+print(modFitc$finalModel, digits=3)
+```
+
+
+```{r}
+fancyRpartPlot(modFitc$finalModel)
+```
+
+Execute against the testing model
+```{r}
+predictions <- predict(modFitc, newdata=testing)
+print(confusionMatrix(predictions, testing$classe), digits=4)
+```
+Unfortunately, classification method resulted in low accuracy rate.  So, we will move on to random forest method.
+
+####Random forest
+First train on the training data using random forest method
+
+```{r  eval=FALSE}
+# Training data based on training data 
+set.seed(222)
+modFit <- train(training$classe ~ ., data = training, method = "rf",trControl=trainControl(method = "cv", number = 4))
+print(modFit,3)
+saveRDS(model, "rfmodel.RDS")
+```
+
+Run it against the testing data 
+
+```{r}
+#Run against testing data
+modFit <- readRDS("rfmodel.RDS")
+predictions <- predict(modFit, newdata=testing)
+print(confusionMatrix(predictions, testing$classe), digits=4)
+```
+It shows that we have 99.49% accuracy in predicting the data.
+
+
+Now run it against the testing data provided for the assignment. 
+```{r}
+ finalanswer <- predict(modFit, newdata = im_testing)
+print(finalanswer)
+```
+
+```{r, echo=FALSE, eval=FALSE}
+# Function to create individual files for each letter of prediction
+pml_write_files = function(x){
+n = length(x)
+  for(i in 1:n){
+  filename = paste0("problem_id_",i,".txt")
+  write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+```
+
+####Error rate out of sample
+The error rate out of the sample is less than 1%, which is quite good for such analysis. 
+
+####Conclusion
+The model built with random forest predicted the results with 99.49% accuracy. The results are quite promising.  For identified mistakes using a dumb bell, the prediction is quite accurate.  
+
